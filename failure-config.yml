@@ -1,0 +1,3 @@
+xplane_directory: "~/.local/share/Steam/steamapps/common/X-Plane 12"
+expected_failures: 2
+mtbf_hours: 1
