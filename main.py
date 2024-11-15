@@ -2,6 +2,7 @@ import enum
 import os
 import random
 import re
+import datetime
 from typing import Any, List, Tuple, Optional
 
 import yaml
@@ -13,12 +14,18 @@ class Config:
     xplane_directory: str
     expected_failures: float
     mtbf_hours: float
+    scenario_name: Optional[str]
 
     def __init__(self, data: Any):
         assert isinstance(data, dict)
         self.xplane_directory = data["xplane_directory"]
         self.expected_failures = data["expected_failures"]
         self.mtbf_hours = data["mtbf_hours"]
+        self.scenario_name = data.get("scenario_name")
+
+    @property
+    def challenger_dir(self):
+        return os.path.expanduser(os.path.join(self.xplane_directory, "Aircraft", "X-Aviation", "CL650"))
 
 
 class FailureState(enum.IntEnum):
@@ -96,8 +103,7 @@ def load_config():
 
 def load_failures(config: Config):
     failures = []
-    failure_conf_path = os.path.expanduser(os.path.join(config.xplane_directory, "Aircraft", "X-Aviation", "CL650",
-                                     "plugins", "systems", "data", "failures.conf"))
+    failure_conf_path = os.path.join(config.challenger_dir, "plugins", "systems", "data", "failures.conf")
     with open(failure_conf_path, "r") as file:
         lines = file.readlines()
     for line in lines:
@@ -107,7 +113,7 @@ def load_failures(config: Config):
     return failures
 
 
-def get_random_trigger(config: Config, failure: str):
+def get_random_trigger(config: Config, failure: str) -> Tuple[str, FailureState, Optional[int]]:
     trigger_choices = FailureState.triggerable_by_random_failure()
     trigger = random.choice(trigger_choices)
     param_range = FailureState.get_parameter_range_for_failure_state(config, trigger)
@@ -122,14 +128,25 @@ def get_failure_triggers(config: Config, failure_list: List[str]):
     for failure in failure_list:
         if random.random() < failure_chance:
             failures_with_triggers.append(get_random_trigger(config, failure))
+        # TODO: Check, if adding inactive failures (with failure state 0) is also required
     return failures_with_triggers
 
+def write_failures_to_scenario(config: Config, failure_list: List[Tuple[str, FailureState, Optional[int]]]):
+    default_name = "Random failure scenario " + datetime.datetime.now().isoformat() + ".cfg"
+    scenario_path = os.path.join(config.challenger_dir, "plugins", "systems", "data", config.scenario_name if config.scenario_name else default_name)
+    with open(scenario_path, "w") as file:
+        for failure in failure_list:
+            file.write(failure[0] + "/state=" + str(failure[1].value) + "\n")
+            if failure[2] is not None:
+                file.write(failure[0] + "/param=" + str(failure[2]) + "\n")
 
 def main():
     config = load_config()
     failures = load_failures(config)
+    assert len(failures) > 0, "No failures could be loaded from the failures.conf."
     triggers = get_failure_triggers(config, failures)
-    print(triggers)
+    print("Writing failures to scenario: " , triggers)
+    write_failures_to_scenario(config, triggers)
 
 
 if __name__ == "__main__":
