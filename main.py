@@ -5,9 +5,10 @@ import re
 import datetime
 from typing import Any, List, Tuple, Optional
 
+import click
 import yaml
 
-MAX_OPERATING_CEILING_FT = 41000
+MAX_OPERATING_CEILING_M = 12497
 
 
 class Config:
@@ -22,6 +23,9 @@ class Config:
         self.expected_failures = data["expected_failures"]
         self.mtbf_hours = data["mtbf_hours"]
         self.scenario_name = data.get("scenario_name")
+
+    def description(self):
+        return f"expected_failures: {self.expected_failures}; mtbf_hours: {self.mtbf_hours}"
 
     @property
     def challenger_dir(self):
@@ -84,7 +88,7 @@ class FailureState(enum.IntEnum):
             case FailureState.V1 | FailureState.VR | FailureState.V2 | FailureState.VT:
                 return -30, 30
             case FailureState.AMSL:
-                return -100, MAX_OPERATING_CEILING_FT
+                return -100, MAX_OPERATING_CEILING_M
             case FailureState.AGL:
                 return 10, 2500
             case FailureState.EXACT_TIMEOUT | FailureState.APPROX_TIMEOUT:
@@ -128,25 +132,32 @@ def get_failure_triggers(config: Config, failure_list: List[str]):
     for failure in failure_list:
         if random.random() < failure_chance:
             failures_with_triggers.append(get_random_trigger(config, failure))
-        # TODO: Check, if adding inactive failures (with failure state 0) is also required
     return failures_with_triggers
 
 def write_failures_to_scenario(config: Config, failure_list: List[Tuple[str, FailureState, Optional[int]]]):
-    default_name = "Random failure scenario " + datetime.datetime.now().isoformat() + ".cfg"
-    scenario_path = os.path.join(config.challenger_dir, "plugins", "systems", "data", config.scenario_name if config.scenario_name else default_name)
+    now_isoformat = datetime.datetime.now().isoformat()
+    default_name = "Random failure scenario " + now_isoformat.replace(":", "-") + ".sce"
+    scenario_path = os.path.join(config.challenger_dir, "plugins", "systems", "data", "stock_failures", config.scenario_name if config.scenario_name else default_name)
     with open(scenario_path, "w") as file:
+        file.write(f"# Automatically generated using cl650-random-failures at {now_isoformat}\n")
+        file.write(f"# Config: {config.description()}\n")
         for failure in failure_list:
-            file.write(failure[0] + "/state=" + str(failure[1].value) + "\n")
+            file.write("libfail" + failure[0] + "/state = " + str(failure[1].value) + "\n")
             if failure[2] is not None:
-                file.write(failure[0] + "/param=" + str(failure[2]) + "\n")
+                file.write("libfail" + failure[0] + "/param = " + str(failure[2]) + "\n")
+    return scenario_path
 
-def main():
+@click.command()
+@click.option("--verbose", "-v", default=False, is_flag=True, help="Include additional information in stdout (like generated failures)")
+def main(verbose: bool):
     config = load_config()
     failures = load_failures(config)
     assert len(failures) > 0, "No failures could be loaded from the failures.conf."
     triggers = get_failure_triggers(config, failures)
-    print("Writing failures to scenario: " , triggers)
-    write_failures_to_scenario(config, triggers)
+    if verbose:
+        print("Failures included in generated scenario:", triggers)
+    scenario_path = write_failures_to_scenario(config, triggers)
+    print(f"Wrote scenario to '{scenario_path}'")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,4 @@
+xplane_directory: "<<path-to-your-xplane-main-directory>>"
+expected_failures: 2
+mtbf_hours: 3
+scenario_name: "MyScenario.sce"

@@ -1,4 +1,0 @@
-xplane_directory: "xplane"
-expected_failures: 1
-mtbf_hours: 1
-scenario_name: "scenario.cfg"
