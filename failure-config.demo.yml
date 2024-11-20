@@ -2,3 +2,18 @@ xplane_directory: "<<path-to-your-xplane-main-directory>>"
 expected_failures: 2
 mtbf_hours: 3
 scenario_name: "MyScenario.sce"
+overrides:
+  systems:
+    eng:
+      left:
+        mult: 5
+        combust:
+          instability:
+            state: 4
+            param: 7
+      right:
+        ign:
+          A:
+            state: 1
+          B:
+            mtbf_hours: 2
