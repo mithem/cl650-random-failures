@@ -2,6 +2,14 @@ xplane_directory: "<<path-to-your-xplane-main-directory>>"
 expected_failures: 2
 mtbf_hours: 3
 scenario_name: "MyScenario.sce"
+state_probability_overrides:
+  ias: 0
+  tas: 0
+  # Disabling all speed triggers (but v1) reduces chances of chaotic takeoff (airspeed increase has many trigger chances)
+  vr: 0
+  v2: 0
+  vt: 0
+  gs: 0
 overrides:
   systems:
     eng:
