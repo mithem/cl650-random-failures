@@ -12,7 +12,6 @@ import yaml
 MAX_OPERATING_CEILING_M = 12497
 
 
-
 class FailureState(enum.IntEnum):
     NOT_FAILED = 0
     ACTIVE = 1
@@ -52,13 +51,13 @@ class FailureState(enum.IntEnum):
             FailureState.LIFTOFF,
             FailureState.GEAR_UP,
             FailureState.GEAR_DOWN,
-            FailureState.GEAR_CYCLED
+            FailureState.GEAR_CYCLED,
         ]
 
     @staticmethod
-    def get_parameter_range_for_failure_state(config: "Config", failure_state: "FailureState") -> \
-    Optional[
-        Tuple[int, int]]:
+    def get_parameter_range_for_failure_state(
+        config: "Config", failure_state: "FailureState"
+    ) -> Optional[Tuple[int, int]]:
         match failure_state:
             case FailureState.ACTIVE:
                 return None
@@ -76,8 +75,11 @@ class FailureState(enum.IntEnum):
                 return int(config.mtbf_hours / 3 * 60), int(config.mtbf_hours * 3 * 60)
             case FailureState.LIFTOFF:
                 return 1, 90
-            case FailureState.GEAR_UP | FailureState.GEAR_DOWN | FailureState.GEAR_CYCLED:
+            case (
+                FailureState.GEAR_UP | FailureState.GEAR_DOWN | FailureState.GEAR_CYCLED
+            ):
                 return None
+
 
 FAILURE_STATE_DISPLAY_NAMES = {
     "not-failed": FailureState.NOT_FAILED,
@@ -98,8 +100,9 @@ FAILURE_STATE_DISPLAY_NAMES = {
     "gear-up": FailureState.GEAR_UP,
     "gear-down": FailureState.GEAR_DOWN,
     "gear-cycled": FailureState.GEAR_CYCLED,
-    "ctrl-f": FailureState.CTRL_F
+    "ctrl-f": FailureState.CTRL_F,
 }
+
 
 class FailureOverrideEntry:
     failure: str
@@ -108,7 +111,15 @@ class FailureOverrideEntry:
     mtbf_hours: float | None
     probability_multiplier: float | None
 
-    def __init__(self, failure: str, state: int | None = None, param: int | None = None, mtbf_hours: float | None = None, mult: float | None = None, **kwargs):
+    def __init__(
+        self,
+        failure: str,
+        state: int | None = None,
+        param: int | None = None,
+        mtbf_hours: float | None = None,
+        mult: float | None = None,
+        **kwargs,
+    ):
         self.failure = failure
         self.state = FailureState(state) if state is not None else None
         self.param = param
@@ -123,6 +134,7 @@ class FailureOverrideEntry:
 
     def __repr__(self):
         return str(self)
+
 
 class StateProbabilityOverrideEntry:
     state: FailureState
@@ -141,7 +153,10 @@ class StateProbabilityOverrideEntry:
     def __repr__(self):
         return str(self)
 
-def _get_failure_override_entries(override_config: Dict[str, Any], prepend_origin: str = "") -> List[FailureOverrideEntry]:
+
+def _get_failure_override_entries(
+    override_config: Dict[str, Any], prepend_origin: str = ""
+) -> List[FailureOverrideEntry]:
     entries = []
     keywords = ["state", "param", "mtbf_hours", "mult"]
     for keyword in keywords:
@@ -149,20 +164,41 @@ def _get_failure_override_entries(override_config: Dict[str, Any], prepend_origi
             entries.append(FailureOverrideEntry(prepend_origin, **override_config))
     for key, value in override_config.items():
         if key not in keywords:
-            entries += _get_failure_override_entries(value, prepend_origin=prepend_origin + "/" + key)
+            entries += _get_failure_override_entries(
+                value, prepend_origin=prepend_origin + "/" + key
+            )
     return entries
 
-def _get_state_probability_override_entries(override_config: Dict[str, float]) -> List[StateProbabilityOverrideEntry]:
+
+def _get_state_probability_override_entries(
+    override_config: Dict[str, float],
+) -> List[StateProbabilityOverrideEntry]:
     entries = []
     for state_name, multiplier in override_config.items():
-        assert type(state_name) == str, "Expected state to be string, found " + str(type(state_name)) + " (" + str(state_name) + ")"
-        assert multiplier >= 0, "Invalid multiplier " + str(multiplier) + " (" + str(type(multiplier)) + ") for override for state " + state_name
+        assert type(state_name) == str, (
+            "Expected state to be string, found "
+            + str(type(state_name))
+            + " ("
+            + str(state_name)
+            + ")"
+        )
+        assert multiplier >= 0, (
+            "Invalid multiplier "
+            + str(multiplier)
+            + " ("
+            + str(type(multiplier))
+            + ") for override for state "
+            + state_name
+        )
         state = FAILURE_STATE_DISPLAY_NAMES.get(state_name)
         if state is None:
-            raise ValueError(f"State {state_name} is not valid. Expected one of: {', '.join(FAILURE_STATE_DISPLAY_NAMES.keys())}")
+            raise ValueError(
+                f"State {state_name} is not valid. Expected one of: {', '.join(FAILURE_STATE_DISPLAY_NAMES.keys())}"
+            )
         entry = StateProbabilityOverrideEntry(state, multiplier)
         entries.append(entry)
     return entries
+
 
 class Config:
     xplane_directory: str
@@ -178,25 +214,42 @@ class Config:
         self.expected_failures = data["expected_failures"]
         self.mtbf_hours = data["mtbf_hours"]
         self.scenario_name = data.get("scenario_name")
-        self.overrides = list(sorted(_get_failure_override_entries(data.get("overrides", {})), reverse=True))
-        self.state_probability_overrides = list(sorted(_get_state_probability_override_entries(data.get("state_probability_overrides", {})), reverse=True))
+        self.overrides = list(
+            sorted(
+                _get_failure_override_entries(data.get("overrides", {})), reverse=True
+            )
+        )
+        self.state_probability_overrides = list(
+            sorted(
+                _get_state_probability_override_entries(
+                    data.get("state_probability_overrides", {})
+                ),
+                reverse=True,
+            )
+        )
 
     def description(self):
         return f"expected_failures: {self.expected_failures}; mtbf_hours: {self.mtbf_hours}; overrides: {self.overrides}; state-probability-overrides: {self.state_probability_overrides}"
 
     @property
     def challenger_dir(self):
-        return os.path.expanduser(os.path.join(self.xplane_directory, "Aircraft", "X-Aviation", "CL650"))
+        return os.path.expanduser(
+            os.path.join(self.xplane_directory, "Aircraft", "X-Aviation", "CL650")
+        )
 
     def get_override_for_failure(self, failure: str) -> FailureOverrideEntry | None:
         for override in self.overrides:
             if override.failure == failure:
                 return override
-            if failure.startswith(override.failure): # A general category (e.g. /systems/eng/left) overrides this specific failure (e.g. /systems/eng/left/rev/deploy)
+            if failure.startswith(
+                override.failure
+            ):  # A general category (e.g. /systems/eng/left) overrides this specific failure (e.g. /systems/eng/left/rev/deploy)
                 return override
         return None
 
-    def get_state_probability_override(self, state: FailureState) -> StateProbabilityOverrideEntry | None:
+    def get_state_probability_override(
+        self, state: FailureState
+    ) -> StateProbabilityOverrideEntry | None:
         for override in self.state_probability_overrides:
             if override.state == state:
                 return override
@@ -209,7 +262,8 @@ class Config:
             override = self.get_state_probability_override(state)
             if override is not None:
                 distribution[i] = override.multiplier
-        return distribution / sum(distribution)
+        return list(distribution / sum(distribution))
+
 
 def load_config():
     with open("failure-config.yml", "r") as file:
@@ -219,7 +273,9 @@ def load_config():
 
 def load_failures(config: Config):
     failures = []
-    failure_conf_path = os.path.join(config.challenger_dir, "plugins", "systems", "data", "failures.conf")
+    failure_conf_path = os.path.join(
+        config.challenger_dir, "plugins", "systems", "data", "failures.conf"
+    )
     with open(failure_conf_path, "r") as file:
         lines = file.readlines()
     for line in lines:
@@ -229,7 +285,9 @@ def load_failures(config: Config):
     return failures
 
 
-def get_random_trigger(config: Config, failure: str, override: FailureOverrideEntry | None) -> Tuple[str, FailureState, Optional[int]]:
+def get_random_trigger(
+    config: Config, failure: str, override: FailureOverrideEntry | None
+) -> Tuple[str, FailureState, Optional[int]]:
     if override is not None and override.state is not None:
         return failure, override.state, override.param
     trigger_choices = FailureState.triggerable_by_random_failure()
@@ -248,27 +306,59 @@ def get_failure_triggers(config: Config, failure_list: List[str], verbose: bool)
         override: FailureOverrideEntry | None = config.get_override_for_failure(failure)
         if verbose and override is not None:
             print(f"Enabled override for failure {failure}: {override}")
-        mult = 1 if override is None or override.probability_multiplier is None else override.probability_multiplier
+        mult = (
+            1
+            if override is None or override.probability_multiplier is None
+            else override.probability_multiplier
+        )
         if random.random() < failure_chance * mult:
             failures_with_triggers.append(get_random_trigger(config, failure, override))
     return failures_with_triggers
 
-def write_failures_to_scenario(config: Config, failure_list: List[Tuple[str, FailureState, Optional[int]]]):
+
+def write_failures_to_scenario(
+    config: Config, failure_list: List[Tuple[str, FailureState, Optional[int]]]
+):
     now_isoformat = datetime.datetime.now().isoformat()
     default_name = "Random failure scenario " + now_isoformat.replace(":", "-") + ".sce"
-    scenario_path = os.path.join(config.challenger_dir, "plugins", "systems", "data", "stock_failures", config.scenario_name if config.scenario_name else default_name)
+    scenario_path = os.path.join(
+        config.challenger_dir,
+        "plugins",
+        "systems",
+        "data",
+        "stock_failures",
+        config.scenario_name if config.scenario_name else default_name,
+    )
     with open(scenario_path, "w") as file:
-        file.write(f"# Automatically generated using cl650-random-failures at {now_isoformat}\n")
+        file.write(
+            f"# Automatically generated using cl650-random-failures at {now_isoformat}\n"
+        )
         file.write(f"# Config: {config.description()}\n")
         for failure in failure_list:
-            file.write("libfail" + failure[0] + "/state = " + str(failure[1].value) + "\n")
+            file.write(
+                "libfail" + failure[0] + "/state = " + str(failure[1].value) + "\n"
+            )
             if failure[2] is not None:
-                file.write("libfail" + failure[0] + "/param = " + str(failure[2]) + "\n")
+                file.write(
+                    "libfail" + failure[0] + "/param = " + str(failure[2]) + "\n"
+                )
     return scenario_path
 
+
 @click.command()
-@click.option("--verbose", "-v", default=False, is_flag=True, help="Include additional information in stdout (like generated failures)")
-@click.option("--dry", default=False, is_flag=True, help="Don't write any files (just show what they do)")
+@click.option(
+    "--verbose",
+    "-v",
+    default=False,
+    is_flag=True,
+    help="Include additional information in stdout (like generated failures)",
+)
+@click.option(
+    "--dry",
+    default=False,
+    is_flag=True,
+    help="Don't write any files (just show what they do)",
+)
 def main(verbose: bool, dry: bool):
     config = load_config()
     failures = load_failures(config)
