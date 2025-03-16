@@ -316,6 +316,19 @@ def get_failure_triggers(config: Config, failure_list: List[str], verbose: bool)
     return failures_with_triggers
 
 
+def load_possible_circuit_breaker_failures(scenario_path: str) -> List[str]:
+    with open(scenario_path, "r") as file:
+        lines = file.readlines()
+    possible_failures = []
+    for line in lines:
+        possible_match = re.match(r"libfail(?P<failure_name>[\w/]+)", line)
+        if possible_match:
+            failure_name = possible_match.group("failure_name")
+            if failure_name.lower().startswith("cbp"):
+                possible_failures.append(failure_name)
+    return possible_failures
+
+
 def write_failures_to_scenario(
     config: Config, failure_list: List[Tuple[str, FailureState, Optional[int]]]
 ):
@@ -359,9 +372,21 @@ def write_failures_to_scenario(
     is_flag=True,
     help="Don't write any files (just show what they do)",
 )
-def main(verbose: bool, dry: bool):
+@click.option(
+    "--circuit-breaker-scenario",
+    "-cbs",
+    default=None,
+    type=str,
+    help="Path to scenario file that includes possible circuit breaker failures",
+)
+def main(verbose: bool, dry: bool, circuit_breaker_scenario: str | None):
     config = load_config()
     failures = load_failures(config)
+    if circuit_breaker_scenario is not None:
+        circuit_breaker_failures = load_possible_circuit_breaker_failures(
+            circuit_breaker_scenario
+        )
+        failures += circuit_breaker_failures
     assert len(failures) > 0, "No failures could be loaded from the failures.conf."
     triggers = get_failure_triggers(config, failures, verbose)
     if verbose or dry:
